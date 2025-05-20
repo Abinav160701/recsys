@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 # ────────────────────────────────────────────────────────────────
 # 0.  LOAD STATIC & LIVE DATA ON START-UP
 # ────────────────────────────────────────────────────────────────
-url=${{ Redis.REDIS_URL }}
+url="redis://default:caGsThrOKxjMqBtfAJsJIsDDnbZDQWxf@shortline.proxy.rlwy.net:43464"
 rdb = redis.from_url(url, decode_responses=False)
 _unpickle = lambda k: pickle.loads(rdb.get(k))
 
