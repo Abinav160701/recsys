@@ -19,5 +19,6 @@ COPY boost_table.csv*  /assets/
 
 EXPOSE 8000
 USER recsys
+ENV REDIS_URL="redis://default:caGsThrOKxjMqBtfAJsJIsDDnbZDQWxf@shortline.proxy.rlwy.net:43464"
 
 CMD ["uvicorn", "app.recommender_app:app", "--host", "0.0.0.0", "--port", "80"]

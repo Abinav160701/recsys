@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 pydantic
-redis
+redis>=4.3  
 pandas
 numpy
 scipy<=1.10.1
