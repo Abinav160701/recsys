@@ -1,4 +1,4 @@
- ───── Dockerfile ─────────────────────────────────────────────────────
+# ───── Dockerfile ─────────────────────────────────────────────────────
 FROM python:3.11-slim
 
 # 1. system deps for numpy / scipy wheels (otherwise they compile & need RAM)
