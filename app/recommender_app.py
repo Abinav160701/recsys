@@ -1,3 +1,14 @@
+# reco_service.py  ──────────────────────────────────────────────
+import io, heapq, pickle, redis
+from collections import defaultdict
+from typing import List
+
+import numpy as np
+import pandas as pd
+import scipy.sparse as sp
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
 # ────────────────────────────────────────────────────────────────
 # 0.  LOAD STATIC & LIVE DATA ON START-UP
 # ────────────────────────────────────────────────────────────────
@@ -190,8 +201,3 @@ def reco(req: RecoRequest):
         "sku":  req.sku,
         "recs": [ {"sku": s, "score": float(sc)} for s, sc in recs ]
     }
-
-# run with:  uvicorn reco_service:app --host 0.0.0.0 --port 8000 --workers 2
-
-
-# run with:  uvicorn reco_service:app --host 0.0.0.0 --port 8000 --workers 2
