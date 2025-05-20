@@ -14,11 +14,14 @@ COPY app/ ./app
 # Copy small static assets (CSV ≤ 1 MB)
 COPY skus_metadata.csv /assets/
 # OPTIONAL: if you sometimes ship boost_table.csv
-COPY boost_table.csv*  /assets/     
+#COPY boost_table.csv*  /assets/     
 # * means “copy if exists”
 
-EXPOSE 8000
+ENV PORT=8080
+EXPOSE 8080
 USER recsys
 ENV REDIS_URL="redis://default:caGsThrOKxjMqBtfAJsJIsDDnbZDQWxf@shortline.proxy.rlwy.net:43464"
 
-CMD ["uvicorn", "app.recommender_app:app", "--host", "0.0.0.0", "--port", "80"]
+#CMD ["uvicorn", "app.recommender_app:app", "--host", "0.0.0.0", "--port", "80"]
+
+CMD ["sh", "-c", "uvicorn app.recommender_app:app --host 0.0.0.0 --port ${PORT}"]
