@@ -19,7 +19,7 @@ user_norm   = np.frombuffer(rdb.get("cf:user_norm"), dtype="float32")
 R           = sp.load_npz(io.BytesIO(rdb.get("cf:R")))
 item_co     = sp.load_npz(io.BytesIO(rdb.get("cf:item_cooc")))
 
-META = (pd.read_csv("skus_metadata.csv",
+META = (pd.read_csv("./skus_metadata.csv",
                     usecols=["sku", "sale_price", "size_availability",
                              "brand", "l1", "l2", "color"])
         .set_index("sku"))
