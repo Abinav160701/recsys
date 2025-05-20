@@ -8,52 +8,68 @@ import pandas as pd
 import scipy.sparse as sp
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+import os
 
 # ────────────────────────────────────────────────────────────────
 # 0.  LOAD STATIC & LIVE DATA ON START-UP
 # ────────────────────────────────────────────────────────────────
-url="redis://default:caGsThrOKxjMqBtfAJsJIsDDnbZDQWxf@shortline.proxy.rlwy.net:43464"
-#rdb = redis.from_url("redis://localhost:6379/0", decode_responses=False)
-rdb = redis.from_url(url, decode_responses=False)
-_unpickle = lambda k: pickle.loads(rdb.get(k))
+app = FastAPI(title="CF-Recommender", version="1.0")
 
-print("⏳  loading artefacts from Redis …")
-user_item   = _unpickle("cf:user_item")
-u2i, s2j    = _unpickle("cf:u2i"), _unpickle("cf:s2j")
-j2s         = {v: k for k, v in s2j.items()}
+# globals that will be filled on startup
+user_item = u2i = s2j = j2s = None
+user_pprice = u_brand = u_cat = None
+user_norm = R = item_co = None
+META = PRICE = BRAND = CAT = None
+EXTRA_BOOST = {"brand": {}, "cat": {}}
 
-user_pprice = _unpickle("cf:price_pref")
-u_brand     = _unpickle("cf:brand_pref")
-u_cat       = _unpickle("cf:cat_pref")
+price_of = lambda s: None
+brand_of = lambda s: None
+cat_of   = lambda s: None
 
-user_norm   = np.frombuffer(rdb.get("cf:user_norm"), dtype="float32")
-R           = sp.load_npz(io.BytesIO(rdb.get("cf:R")))
-item_co     = sp.load_npz(io.BytesIO(rdb.get("cf:item_cooc")))
+@app.on_event("startup")
+def load_artefacts() -> None:
+    url = os.environ["REDIS_URL"]      
+    rdb = redis.from_url(url, decode_responses=False)
+    def _unpickle(k: str):
+        raw = rdb.get(k)
+        if raw is None:
+            raise RuntimeError(f"Redis key '{k}' not found")
+        return pickle.loads(raw)
 
-META = (pd.read_csv("/assets/skus_metadata.csv",
-                    usecols=["sku", "sale_price", "size_availability",
-                             "brand", "l1", "l2", "color"])
-        .set_index("sku"))
-PRICE = META.sale_price.to_dict()
-BRAND = META.brand.fillna("unknown").to_dict()
-CAT   = (META.l1.fillna("unknown") + "▸" + META.l2.fillna("unknown")).to_dict()
+    global user_item, u2i, s2j, j2s, user_pprice, u_brand, u_cat
+    global user_norm, R, item_co, META, PRICE, BRAND, CAT, EXTRA_BOOST, price_of, brand_of, cat_of
 
-# optional ad-hoc boost table ↓
-try:
-    adhoc = (pd.read_csv("boost_table.csv",
-                         dtype={"boost_type": str, "key": str, "pct": float})
-               .dropna(subset=["boost_type", "key", "pct"]))
-    EXTRA_BOOST = {
-        "brand": dict(adhoc.query("boost_type=='brand'")[["key", "pct"]].values),
-        "cat":   dict(adhoc.query("boost_type=='cat'")  [["key", "pct"]].values),
-    }
-    print(f"✓  loaded ad-hoc boosts ({len(EXTRA_BOOST['brand'])} brands, "
-          f"{len(EXTRA_BOOST['cat'])} cats)")
-except FileNotFoundError:
-    EXTRA_BOOST = {"brand": {}, "cat": {}}
-    print("⚠️  boost_table.csv not found – skipping extra boosts")
+    user_item   = _unpickle("cf:user_item")
+    u2i, s2j    = _unpickle("cf:u2i"), _unpickle("cf:s2j")
+    i2u         = {v:k for k,v in u2i.items()}
+    j2s         = {v: k for k, v in s2j.items()}
+    user_pprice = _unpickle("cf:price_pref")
+    u_brand     = _unpickle("cf:brand_pref")
+    u_cat       = _unpickle("cf:cat_pref")
 
-print("✓  artefact load complete")
+    user_norm = np.frombuffer(rdb.get("cf:user_norm"), dtype="float32")
+    R         = sp.load_npz(io.BytesIO(rdb.get("cf:R")))
+    item_co   = sp.load_npz(io.BytesIO(rdb.get("cf:item_cooc")))
+
+    META   = pd.read_csv("/assets/skus_metadata.csv",
+                         usecols=["sku","sale_price","size_availability",
+                                  "brand","l1","l2","color"]).set_index("sku")
+    PRICE  = META.sale_price.to_dict()
+    BRAND  = META.brand.fillna("unknown").to_dict()
+    CAT    = (META.l1.fillna("unknown")+"▸"+META.l2.fillna("unknown")).to_dict()
+
+    price_of = PRICE.get
+    brand_of = BRAND.get
+    cat_of   = CAT.get
+
+    # optional ad-hoc boosts
+    if os.path.exists("/assets/boost_table.csv"):
+        adhoc = pd.read_csv("/assets/boost_table.csv").dropna(subset=["boost_type"])
+        EXTRA_BOOST["brand"] = dict(adhoc.query("boost_type=='brand'")[["key","pct"]].values)
+        EXTRA_BOOST["cat"]   = dict(adhoc.query("boost_type=='cat'")[["key","pct"]].values)
+
+    print("✓ artefacts loaded – app ready")
+
 
 # ────────────────────────────────────────────────────────────────
 # 1.  HELPERS & BUSINESS-LOGIC FUNCTIONS  (unchanged)
@@ -64,9 +80,7 @@ def valid_sku(s: str) -> bool:
 def valid_user(u: str) -> bool:
     return len(user_item.get(u, {})) >= 1            # plug your own rule
 
-price_of = PRICE.get
-brand_of = BRAND.get
-cat_of   = CAT.get
+
 
 def _cosine_row(i: int) -> np.ndarray:
     # before ─ sims = (R.getrow(i) @ R.T).A.ravel()
@@ -159,7 +173,7 @@ def recommend(user: str, sku: str,
 # ────────────────────────────────────────────────────────────────
 # 2.  FASTAPI LAYER
 # ────────────────────────────────────────────────────────────────
-app = FastAPI(title="CF-Recommender", version="1.0")
+
 
 
 def root():
@@ -186,6 +200,10 @@ class RecoResponse(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/")
+def root():
+    return {"msg": "alive", "docs": "/docs"}
 
 @app.post("/recommend", response_model=RecoResponse)
 def reco(req: RecoRequest):
