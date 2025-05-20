@@ -1,18 +1,23 @@
 # Start from an official lightweight Python image
 FROM python:3.11-slim
 
-# Set the working directory in the container
+# Make a non-root user (Railway & Render best-practice)
+RUN useradd -m recsys
 WORKDIR /app
 
-# Install any Python dependencies
+# Install dependencies first (layer cache)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the FastAPI app code into the container
+# Copy source code
 COPY app/ ./app
+# Copy small static assets (CSV ≤ 1 MB)
+COPY skus_metadata.csv /assets/
+# OPTIONAL: if you sometimes ship boost_table.csv
+COPY boost_table.csv*  /assets/     
+# * means “copy if exists”
 
-# Expose the port that FastAPI will run on (FastAPI's default is 8000)
 EXPOSE 8000
+USER recsys
 
-# Start the FastAPI server using Uvicorn
-CMD ["uvicorn", "app.recommender_app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.recommender_app:app", "--host", "0.0.0.0", "--port", "80"]
