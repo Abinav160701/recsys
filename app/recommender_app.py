@@ -30,7 +30,7 @@ user_norm   = np.frombuffer(rdb.get("cf:user_norm"), dtype="float32")
 R           = sp.load_npz(io.BytesIO(rdb.get("cf:R")))
 item_co     = sp.load_npz(io.BytesIO(rdb.get("cf:item_cooc")))
 
-META = (pd.read_csv("./skus_metadata.csv",
+META = (pd.read_csv("/assets/skus_metadata.csv",
                     usecols=["sku", "sale_price", "size_availability",
                              "brand", "l1", "l2", "color"])
         .set_index("sku"))
@@ -69,8 +69,9 @@ brand_of = BRAND.get
 cat_of   = CAT.get
 
 def _cosine_row(i: int) -> np.ndarray:
-    sims = (R.getrow(i) @ R.T).A.ravel()
-    sims[i] = 0.
+    # before ─ sims = (R.getrow(i) @ R.T).A.ravel()
+    sims = (R.getrow(i) @ R.T).toarray().ravel()   # ← works with any SciPy
+    sims[i] = 0.0
     return sims / (user_norm[i] * user_norm + 1e-9)
 
 def _minmax(d: dict) -> dict:
@@ -201,3 +202,5 @@ def reco(req: RecoRequest):
         "sku":  req.sku,
         "recs": [ {"sku": s, "score": float(sc)} for s, sc in recs ]
     }
+
+# run with:  uvicorn reco_service:app --host 0.0.0.0 --port 8000 --workers 2
