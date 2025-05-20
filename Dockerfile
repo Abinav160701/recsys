@@ -1,18 +1,21 @@
-# Start from an official lightweight Python image
-FROM python:3.11-slim
+ ───── Dockerfile ─────────────────────────────────────────────────────
+FROM python:3.11-slim-bullseye
 
-# Set the working directory in the container
+# 1. system deps for numpy / scipy wheels (otherwise they compile & need RAM)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential gcc g++ gfortran libopenblas-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# 2. python deps
 WORKDIR /app
-
-# Install any Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the FastAPI app code into the container
+# 3. copy code (but NOT 11-million-row CSVs)
 COPY app/ ./app
 
-# Expose the port that FastAPI will run on (FastAPI's default is 8000)
+# Tell Uvicorn to listen on Railway’s provided $PORT
+ENV PORT 8000
 EXPOSE 8000
 
-# Start the FastAPI server using Uvicorn
-CMD ["uvicorn", "app.recommender_app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.recommender_app:create_app", "--host", "0.0.0.0", "--port", "8000"]
